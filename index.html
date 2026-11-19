@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oceanic Tac-Toe | Sky-Blue Sea P2P Multiplayer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS for zero-backend WebRTC P2P Multiplayer (No Login / No Firebase) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- Canvas Confetti for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts: Inter & Space Grotesk -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(180deg, #bae6fd 0%, #38bdf8 32%, #0284c7 68%, #075985 100%);
+            color: #0f172a;
+            overflow-x: hidden;
+            user-select: none;
+        }
+        .font-display {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        /* Sunbeam & Sea Glass Effects */
+        .sea-glass {
+            background: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 12px 32px -4px rgba(3, 105, 161, 0.18);
+        }
+
+        .sea-glass-dark {
+            background: rgba(7, 89, 133, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(186, 230, 253, 0.4);
+        }
+
+        /* Player X (Deep Ocean Cobalt) & Player O (Coral Reef) */
+        .mark-x {
+            color: #0284c7;
+            text-shadow: 0 2px 10px rgba(2, 132, 199, 0.25);
+        }
+        .mark-o {
+            color: #f97316;
+            text-shadow: 0 2px 10px rgba(249, 115, 22, 0.25);
+        }
+
+        .card-selected {
+            border-color: #0284c7 !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            box-shadow: 0 14px 30px -5px rgba(2, 132, 199, 0.35), 0 0 0 3px rgba(56, 189, 248, 0.4);
+        }
+
+        .active-subboard {
+            box-shadow: 0 0 16px rgba(250, 204, 21, 0.65);
+            border-color: #f59e0b !important;
+            background-color: rgba(254, 243, 199, 0.75) !important;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.35); opacity: 0; }
+            70% { transform: scale(1.12); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Animated Ocean Waves at Bottom */
+        .ocean-waves {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 110px;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .parallax > use {
+            animation: move-forever 22s cubic-bezier(.55,.5,.45,.5) infinite;
+        }
+        .parallax > use:nth-child(1) {
+            animation-delay: -2s;
+            animation-duration: 9s;
+        }
+        .parallax > use:nth-child(2) {
+            animation-delay: -3s;
+            animation-duration: 13s;
+        }
+        .parallax > use:nth-child(3) {
+            animation-delay: -4s;
+            animation-duration: 17s;
+        }
+        .parallax > use:nth-child(4) {
+            animation-delay: -5s;
+            animation-duration: 24s;
+        }
+        @keyframes move-forever {
+            0% { transform: translate3d(-90px, 0, 0); }
+            100% { transform: translate3d(85px, 0, 0); }
+        }
+
+        /* Floating Bubbles */
+        .bubble {
+            position: fixed;
+            bottom: -40px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0.15));
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            z-index: 0;
+            animation: riseUp linear infinite;
+        }
+        @keyframes riseUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 0; }
+            20% { opacity: 0.65; }
+            85% { opacity: 0.4; }
+            100% { transform: translateY(-105vh) scale(1.15); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative">
+
+    <!-- Decorative Sea Bubbles -->
+    <div id="bubble-layer" aria-hidden="true"></div>
+
+    <!-- Top Sky-Blue Sea Navigation Bar -->
+    <header class="w-full bg-white/75 backdrop-blur-md border-b border-sky-200/80 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="returnToLobby()">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-400 via-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-sky-400/30 text-white">
+                    <!-- Sea Wave Icon -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 3 2M3 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 3 2M4 10c2-3 5-5 8-5 4 0 6 3 8 5"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-display font-bold text-lg sm:text-xl tracking-tight text-sky-950">
+                        OCEANIC TAC-TOE
+                    </h1>
+                    <p class="text-[11px] text-sky-700 font-medium -mt-0.5">Sky-Blue P2P Rooms • No Login Required</p>
+                </div>
+            </div>
+
+            <!-- Connection Status & Room Code Pill -->
+            <div id="header-room-info" class="hidden flex items-center gap-2 sm:gap-3">
+                <div class="flex items-center gap-2 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-full text-xs shadow-sm">
+                    <span id="conn-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="conn-text" class="text-sky-900 font-semibold">Waiting for friend...</span>
+                </div>
+                <button onclick="copyRoomCode()" title="Click to copy Room Code" class="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-1.5 rounded-full text-xs font-mono font-bold shadow-sm transition active:scale-95">
+                    <span>ROOM:</span>
+                    <span id="display-room-code">------</span>
+                    <svg class="w-3.5 h-3.5 text-sky-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                </button>
+                <button id="header-share-btn" onclick="copyShareLink()" title="Copy Direct Invite Link" class="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm transition active:scale-95">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                    <span class="hidden sm:inline">Copy Link</span>
+                </button>
+                <button onclick="returnToLobby()" class="text-xs bg-rose-500 hover:bg-rose-600 text-white font-semibold px-3 py-1.5 rounded-full shadow-sm transition active:scale-95">
+                    Leave
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Toast Notification Banner (Replaces alert()) -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col gap-2 w-11/12 max-w-md"></div>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-grow flex items-center justify-center p-4 z-10 pb-24">
+
+        <!-- VIEW 1: LOBBY / SETUP -->
+        <section id="lobby-view" class="w-full max-w-4xl mx-auto space-y-6 animate-pop">
+            <div class="text-center space-y-2">
+                <span class="inline-block px-3 py-1 rounded-full bg-white/75 text-sky-800 text-xs font-bold tracking-wide uppercase shadow-sm">
+                    3×3 • Ultimate 9×9 • Infinite Sea
+                </span>
+                <h2 class="font-display text-3xl sm:text-4xl font-bold text-white drop-shadow-sm">
+                    Set Sail & Choose Your Grid
+                </h2>
+                <p class="text-sky-50 text-sm sm:text-base max-w-xl mx-auto font-medium drop-shadow-sm">
+                    Create an instant P2P room and share your 6-character ocean code with a friend—zero accounts, zero servers.
+                </p>
+            </div>
+
+            <!-- Step 1: Select Game Variant -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 3x3 Classic -->
+                <div onclick="selectVariant('3x3')" id="card-3x3" class="variant-card sea-glass card-selected cursor-pointer rounded-2xl p-5 border-2 border-transparent transition-all hover:-translate-y-1">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-700 text-xs font-bold">SHALLOW REEF</span>
+                        <span class="text-2xl font-display font-bold text-sky-600">3×3</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-sky-950 mb-1">Classic 3×3</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">Quick coastal duel. Align 3 shells or anchors horizontally, vertically, or diagonally to win.</p>
+                </div>
+
+                <!-- 9x9 Ultimate -->
+                <div onclick="selectVariant('9x9')" id="card-9x9" class="variant-card sea-glass cursor-pointer rounded-2xl p-5 border-2 border-transparent transition-all hover:-translate-y-1">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-bold">ARCHIPELAGO</span>
+                        <span class="text-2xl font-display font-bold text-sky-600">9×9</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-sky-950 mb-1">Ultimate 9×9</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">9 islands in a 3×3 sea! Your cell choice steers your opponent's next move to the matching island.</p>
+                </div>
+
+                <!-- Infinite Grid -->
+                <div onclick="selectVariant('infinite')" id="card-infinite" class="variant-card sea-glass cursor-pointer rounded-2xl p-5 border-2 border-transparent transition-all hover:-translate-y-1">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 rounded-lg bg-teal-100 text-teal-800 text-xs font-bold">OPEN OCEAN</span>
+                        <span class="text-2xl font-display font-bold text-sky-600">∞</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-sky-950 mb-1">Infinite Horizon</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">Unbounded panning ocean with zero draws! Navigate freely and connect <strong>5-in-a-row</strong> to conquer.</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Connection Options -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                <!-- Host Online Room -->
+                <div class="sea-glass rounded-2xl p-6 flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex items-center gap-2 text-sky-700 font-bold text-sm mb-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
+                            HOST ONLINE ROOM
+                        </div>
+                        <p class="text-xs text-slate-600">Generate a private room code and play as <strong class="text-sky-700">Player X (Blue)</strong>.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2.5">
+                        <button id="btn-create-room" onclick="createOnlineRoom()" class="flex-1 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-sky-500/30 transition active:scale-95 text-sm">
+                            Create Room
+                        </button>
+                        <button onclick="startLocalGame()" class="bg-sky-100 hover:bg-sky-200 text-sky-900 font-semibold py-3 px-4 rounded-xl border border-sky-300 transition active:scale-95 text-sm">
+                            Local 2P
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Join Online Room -->
+                <div class="sea-glass rounded-2xl p-6 flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex items-center gap-2 text-orange-600 font-bold text-sm mb-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            JOIN FRIEND'S ROOM
+                        </div>
+                        <p class="text-xs text-slate-600">Enter the 6-character room code to join as <strong class="text-orange-600">Player O (Coral)</strong>.</p>
+                    </div>
+                    <div class="flex gap-2.5">
+                        <input id="join-code-input" type="text" maxlength="6" placeholder="E.G. SEA42X" class="w-full uppercase font-mono font-bold tracking-widest text-center bg-white border-2 border-sky-200 focus:border-sky-500 focus:outline-none rounded-xl px-3 py-2.5 text-sky-950 placeholder-slate-400 text-sm">
+                        <button id="btn-join-room" onclick="joinOnlineRoom()" class="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-3 px-5 rounded-xl shadow-md shadow-orange-500/25 transition active:scale-95 text-sm whitespace-nowrap">
+                            Join Room
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 2: ACTIVE GAME ARENA -->
+        <section id="game-view" class="hidden w-full max-w-5xl mx-auto flex flex-col items-center space-y-4">
+            
+            <!-- Scoreboard & Turn Indicator Bar -->
+            <div class="w-full max-w-2xl sea-glass rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-2">
+                <!-- Player X Badge -->
+                <div id="badge-x" class="flex items-center gap-2.5 px-3 py-2 rounded-xl border-2 border-sky-500 bg-sky-50 transition-all">
+                    <span class="font-display font-bold text-xl mark-x">X</span>
+                    <div>
+                        <div class="text-xs font-bold text-sky-950" id="label-x">Player X</div>
+                        <div class="text-[11px] font-semibold text-sky-700">Wins: <span id="score-x">0</span></div>
+                    </div>
+                </div>
+
+                <!-- Turn & Mode Status -->
+                <div class="text-center px-2">
+                    <div id="mode-badge" class="text-[10px] font-bold uppercase tracking-wider text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full inline-block mb-1">
+                        CLASSIC 3×3
+                    </div>
+                    <div id="turn-banner" class="font-display font-bold text-sm sm:text-base text-sky-950">
+                        Player X's Turn
+                    </div>
+                    <div id="sub-instruction" class="text-[11px] text-slate-600 font-medium hidden"></div>
+                </div>
+
+                <!-- Player O Badge -->
+                <div id="badge-o" class="flex items-center gap-2.5 px-3 py-2 rounded-xl border-2 border-transparent bg-white/60 transition-all">
+                    <div class="text-right">
+                        <div class="text-xs font-bold text-sky-950" id="label-o">Player O</div>
+                        <div class="text-[11px] font-semibold text-orange-600">Wins: <span id="score-o">0</span></div>
+                    </div>
+                    <span class="font-display font-bold text-xl mark-o">O</span>
+                </div>
+            </div>
+
+            <!-- Waiting Overlay Banner (When Online Room is waiting for Guest) -->
+            <div id="waiting-banner" class="hidden w-full max-w-2xl bg-amber-50/95 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 animate-spin">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-amber-950">Share your Room Code or Invite Link with a friend to start!</p>
+                        <p class="text-[11px] text-amber-800">Opening the link joins automatically, or they can enter the code.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="copyRoomCode()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition active:scale-95 whitespace-nowrap">
+                        Copy Code: <span id="banner-code" class="font-mono">------</span>
+                    </button>
+                    <button onclick="copyShareLink()" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition active:scale-95 whitespace-nowrap flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                        <span>Share Invite Link</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- BOARD CONTAINER 1: CLASSIC 3x3 -->
+            <div id="board-3x3-wrapper" class="hidden sea-glass p-4 sm:p-6 rounded-3xl">
+                <div id="board-3x3" class="grid grid-cols-3 gap-2.5 sm:gap-3.5 w-[290px] h-[290px] sm:w-[360px] sm:h-[360px]"></div>
+            </div>
+
+            <!-- BOARD CONTAINER 2: ULTIMATE 9x9 -->
+            <div id="board-9x9-wrapper" class="hidden sea-glass p-2.5 sm:p-4 rounded-3xl">
+                <div id="board-9x9" class="grid grid-cols-3 gap-2 sm:gap-3 w-[330px] h-[330px] sm:w-[490px] sm:h-[490px]"></div>
+            </div>
+
+            <!-- BOARD CONTAINER 3: INFINITE ARENA -->
+            <div id="board-infinite-wrapper" class="hidden w-full max-w-3xl sea-glass p-3 sm:p-4 rounded-3xl flex flex-col items-center space-y-2.5">
+                <div class="w-full flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-sky-900 font-semibold">
+                    <span>Goal: <strong>5-in-a-row</strong> • Drag or use arrows to pan the sea</span>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="panInfinite(0, -1)" class="p-1.5 bg-sky-100 hover:bg-sky-200 rounded-lg" title="Pan Up">▲</button>
+                        <button onclick="panInfinite(0, 1)" class="p-1.5 bg-sky-100 hover:bg-sky-200 rounded-lg" title="Pan Down">▼</button>
+                        <button onclick="panInfinite(-1, 0)" class="p-1.5 bg-sky-100 hover:bg-sky-200 rounded-lg" title="Pan Left">◀</button>
+                        <button onclick="panInfinite(1, 0)" class="p-1.5 bg-sky-100 hover:bg-sky-200 rounded-lg" title="Pan Right">▶</button>
+                        <button onclick="recenterInfinite()" class="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg shadow-sm">Center (0,0)</button>
+                    </div>
+                </div>
+                <div id="infinite-viewport" class="w-full overflow-hidden rounded-2xl border-2 border-sky-200 bg-sky-50/90 touch-none cursor-grab active:cursor-grabbing flex items-center justify-center p-2">
+                    <div id="board-infinite" class="grid gap-1"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Game Controls -->
+            <div class="flex items-center gap-3 pt-1">
+                <button id="btn-rematch" onclick="requestRematch()" class="bg-white/90 hover:bg-white text-sky-900 font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-md border border-sky-200 transition active:scale-95">
+                    ↻ New Round / Rematch
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Animated Sky-Blue Ocean Waves Footer -->
+    <div class="ocean-waves" aria-hidden="true">
+        <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+            viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+            <defs>
+                <path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+            </defs>
+            <g class="parallax">
+                <use xlink:href="#gentle-wave" x="48" y="0" fill="rgba(255,255,255,0.28)" />
+                <use xlink:href="#gentle-wave" x="48" y="3" fill="rgba(186,230,253,0.45)" />
+                <use xlink:href="#gentle-wave" x="48" y="5" fill="rgba(224,242,254,0.65)" />
+                <use xlink:href="#gentle-wave" x="48" y="7" fill="rgba(255,255,255,0.88)" />
+            </g>
+        </svg>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. DECORATIVE SEA BUBBLES & TOAST NOTIFICATIONS
+           ========================================================================== */
+        function spawnBubbles() {
+            const layer = document.getElementById('bubble-layer');
+            for (let i = 0; i < 14; i++) {
+                const b = document.createElement('div');
+                b.className = 'bubble';
+                const size = Math.floor(Math.random() * 22) + 8;
+                b.style.width = `${size}px`;
+                b.style.height = `${size}px`;
+                b.style.left = `${Math.random() * 100}vw`;
+                b.style.animationDuration = `${Math.random() * 12 + 10}s`;
+                b.style.animationDelay = `${Math.random() * 10}s`;
+                layer.appendChild(b);
+            }
+        }
+        spawnBubbles();
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                info: 'bg-sky-900/95 text-white border-sky-400',
+                success: 'bg-emerald-700/95 text-white border-emerald-300',
+                error: 'bg-rose-600/95 text-white border-rose-300'
+            };
+            toast.className = `${colors[type] || colors.info} border px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-semibold text-center animate-pop backdrop-blur-md`;
+            toast.textContent = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        /* ==========================================================================
+           2. GAME STATE & PEERJS MULTIPLAYER ARCHITECTURE
+           ========================================================================== */
+        const PEER_PREFIX = 'oceanic-ttt-v1-';
+        let peer = null;
+        let conn = null;
+
+        const state = {
+            variant: '3x3',         // '3x3' | '9x9' | 'infinite'
+            mode: 'local',          // 'local' | 'online'
+            role: 'X',              // 'X' (Host) or 'O' (Guest)
+            roomCode: '',
+            connected: false,
+            turn: 'X',
+            winner: null,           // 'X' | 'O' | 'DRAW' | null
+            scores: { X: 0, O: 0 },
+
+            // 3x3 state
+            board3: Array(9).fill(null),
+            winLine3: [],
+
+            // 9x9 Ultimate state
+            boards9: Array.from({ length: 9 }, () => Array(9).fill(null)),
+            macro9: Array(9).fill(null),
+            nextSub9: null,
+            winLine9: [],
+
+            // Infinite arena state
+            infMap: new Map(),
+            infWinCells: new Set(),
+            viewX: -6,
+            viewY: -4,
+            viewCols: 12,
+            viewRows: 9
+        };
+
+        function selectVariant(variant) {
+            state.variant = variant;
+            document.querySelectorAll('.variant-card').forEach(el => el.classList.remove('card-selected'));
+            const card = document.getElementById(`card-${variant}`);
+            if (card) card.classList.add('card-selected');
+        }
+
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
+        function copyToClipboardFallback(text) {
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            temp.setAttribute('readonly', '');
+            temp.style.position = 'absolute';
+            temp.style.left = '-9999px';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+        }
+
+        function buildInviteUrl(code) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', code);
+            return url.toString();
+        }
+
+        function copyRoomCode() {
+            if (!state.roomCode || state.roomCode === 'LOCAL') return;
+            copyToClipboardFallback(state.roomCode);
+            showToast(`Copied Room Code: ${state.roomCode}`, 'success');
+        }
+
+        async function copyShareLink() {
+            if (!state.roomCode || state.roomCode === 'LOCAL') return;
+            const shareUrl = buildInviteUrl(state.roomCode);
+            copyToClipboardFallback(shareUrl);
+            showToast('Invite link copied! Send it to your friend.', 'success');
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Oceanic Tac-Toe Invite',
+                        text: `Join my Oceanic Tac-Toe match! Room Code: ${state.roomCode}`,
+                        url: shareUrl
+                    });
+                } catch (e) {
+                    // User dismissed share sheet; clipboard copy already succeeded
+                }
+            }
+        }
+
+        /* ==========================================================================
+           3. P2P ROOM HOSTING & JOINING (ZERO LOGIN / NO FIREBASE)
+           ========================================================================== */
+        function createOnlineRoom() {
+            const btn = document.getElementById('btn-create-room');
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
+            cleanupPeer();
+            const code = generateRoomCode();
+            state.roomCode = code;
+            state.mode = 'online';
+            state.role = 'X';
+            state.connected = false;
+            state.scores = { X: 0, O: 0 };
+
+            peer = new Peer(PEER_PREFIX + code, { debug: 1 });
+
+            peer.on('open', () => {
+                btn.disabled = false;
+                btn.textContent = 'Create Room';
+                enterArenaUI();
+                document.getElementById('waiting-banner').classList.remove('hidden');
+                document.getElementById('banner-code').textContent = code;
+                updateConnStatus(false, 'Waiting for Player O...');
+                showToast(`Room ${code} ready! Share code with your friend.`, 'success');
+            });
+
+            peer.on('connection', (connection) => {
+                if (conn && conn.open) {
+                    connection.close();
+                    return;
+                }
+                conn = connection;
+                setupConnectionHandlers();
+            });
+
+            peer.on('error', (err) => {
+                btn.disabled = false;
+                btn.textContent = 'Create Room';
+                showToast(`Connection issue: ${err.type}. Try again.`, 'error');
+            });
+        }
+
+        function joinOnlineRoom() {
+            const rawCode = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (rawCode.length < 4) {
+                showToast('Please enter a valid 6-character room code.', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btn-join-room');
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+
+            cleanupPeer();
+            state.roomCode = rawCode;
+            state.mode = 'online';
+            state.role = 'O';
+            state.connected = false;
+            state.scores = { X: 0, O: 0 };
+
+            peer = new Peer({ debug: 1 });
+
+            peer.on('open', () => {
+                conn = peer.connect(PEER_PREFIX + rawCode, { reliable: true });
+                setupConnectionHandlers();
+
+                setTimeout(() => {
+                    if (!state.connected) {
+                        btn.disabled = false;
+                        btn.textContent = 'Join Room';
+                        showToast('Could not reach room. Check code or host status.', 'error');
+                    }
+                }, 7000);
+            });
+
+            peer.on('error', (err) => {
+                btn.disabled = false;
+                btn.textContent = 'Join Room';
+                showToast(`Room not found or network error (${err.type}).`, 'error');
+            });
+        }
+
+        function setupConnectionHandlers() {
+            conn.on('open', () => {
+                state.connected = true;
+                document.getElementById('btn-join-room').disabled = false;
+                document.getElementById('btn-join-room').textContent = 'Join Room';
+                document.getElementById('waiting-banner').classList.add('hidden');
+
+                if (state.role === 'X') {
+                    // Host sends initial game mode & clean board state to Guest
+                    sendPacket({
+                        type: 'INIT',
+                        variant: state.variant,
+                        scores: state.scores
+                    });
+                    resetBoardState();
+                    enterArenaUI();
+                    updateConnStatus(true, 'Connected (You: X)');
+                    showToast('Friend joined! Your move (X).', 'success');
+                } else {
+                    enterArenaUI();
+                    updateConnStatus(true, 'Connected (You: O)');
+                    showToast('Connected to room! Waiting for Host sync...', 'success');
+                }
+            });
+
+            conn.on('data', (data) => {
+                handleIncomingPacket(data);
+            });
+
+            conn.on('close', () => {
+                state.connected = false;
+                updateConnStatus(false, 'Opponent disconnected');
+                showToast('Opponent left the room.', 'error');
+            });
+        }
+
+        function sendPacket(payload) {
+            if (state.mode === 'online' && conn && conn.open) {
+                conn.send(payload);
+            }
+        }
+
+        function handleIncomingPacket(data) {
+            if (!data || !data.type) return;
+
+            if (data.type === 'INIT') {
+                state.variant = data.variant;
+                state.scores = data.scores || { X: 0, O: 0 };
+                resetBoardState();
+                enterArenaUI();
+                updateConnStatus(true, 'Connected (You: O)');
+            } else if (data.type === 'MOVE') {
+                applyMove(data.payload, false);
+            } else if (data.type === 'REMATCH') {
+                resetBoardState();
+                renderActiveBoard();
+                updateTurnUI();
+                showToast('New round started!', 'info');
+            }
+        }
+
+        function updateConnStatus(isOnline, text) {
+            const dot = document.getElementById('conn-dot');
+            const label = document.getElementById('conn-text');
+            label.textContent = text;
+            if (isOnline) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+            }
+        }
+
+        function cleanupPeer() {
+            if (conn) { try { conn.close(); } catch (e) {} conn = null; }
+            if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+            state.connected = false;
+        }
+
+        function startLocalGame() {
+            cleanupPeer();
+            state.mode = 'local';
+            state.roomCode = 'LOCAL';
+            state.scores = { X: 0, O: 0 };
+            resetBoardState();
+            enterArenaUI();
+            document.getElementById('waiting-banner').classList.add('hidden');
+            updateConnStatus(true, 'Local Pass & Play');
+        }
+
+        function returnToLobby() {
+            cleanupPeer();
+            try {
+                const url = new URL(window.location.href);
+                if (url.searchParams.has('room')) {
+                    url.searchParams.delete('room');
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+            document.getElementById('game-view').classList.add('hidden');
+            document.getElementById('header-room-info').classList.add('hidden');
+            document.getElementById('lobby-view').classList.remove('hidden');
+        }
+
+        /* ==========================================================================
+           4. BOARD INITIALIZATION & UI SWITCHING
+           ========================================================================== */
+        function resetBoardState() {
+            state.turn = 'X';
+            state.winner = null;
+            state.board3 = Array(9).fill(null);
+            state.winLine3 = [];
+            state.boards9 = Array.from({ length: 9 }, () => Array(9).fill(null));
+            state.macro9 = Array(9).fill(null);
+            state.nextSub9 = null;
+            state.winLine9 = [];
+            state.infMap.clear();
+            state.infWinCells.clear();
+            recenterInfinite(false);
+        }
+
+        function enterArenaUI() {
+            document.getElementById('lobby-view').classList.add('hidden');
+            document.getElementById('game-view').classList.remove('hidden');
+            document.getElementById('header-room-info').classList.remove('hidden');
+            document.getElementById('display-room-code').textContent = state.roomCode;
+
+            const shareBtn = document.getElementById('header-share-btn');
+            if (shareBtn) {
+                shareBtn.classList.toggle('hidden', state.mode !== 'online');
+            }
+
+            // Player Labels
+            if (state.mode === 'online') {
+                document.getElementById('label-x').textContent = state.role === 'X' ? 'You (X)' : 'Friend (X)';
+                document.getElementById('label-o').textContent = state.role === 'O' ? 'You (O)' : 'Friend (O)';
+            } else {
+                document.getElementById('label-x').textContent = 'Player X';
+                document.getElementById('label-o').textContent = 'Player O';
+            }
+
+            // Mode Badge & Wrapper Visibility
+            document.getElementById('board-3x3-wrapper').classList.add('hidden');
+            document.getElementById('board-9x9-wrapper').classList.add('hidden');
+            document.getElementById('board-infinite-wrapper').classList.add('hidden');
+
+            const modeLabels = {
+                '3x3': 'CLASSIC 3×3',
+                '9x9': 'ULTIMATE 9×9',
+                'infinite': 'INFINITE ARENA (5-IN-A-ROW)'
+            };
+            document.getElementById('mode-badge').textContent = modeLabels[state.variant];
+            document.getElementById(`board-${state.variant}-wrapper`).classList.remove('hidden');
+
+            updateScoresUI();
+            renderActiveBoard();
+            updateTurnUI();
+        }
+
+        function requestRematch() {
+            if (state.mode === 'online' && !state.connected) {
+                showToast('Wait for your friend to connect first!', 'error');
+                return;
+            }
+            resetBoardState();
+            renderActiveBoard();
+            updateTurnUI();
+            if (state.mode === 'online') {
+                sendPacket({ type: 'REMATCH' });
+            }
+        }
+
+        function canLocalUserMove() {
+            if (state.winner) return false;
+            if (state.mode === 'local') return true;
+            if (!state.connected) {
+                showToast('Waiting for friend to join the room...', 'info');
+                return false;
+            }
+            if (state.turn !== state.role) {
+                showToast("It's your opponent's turn!", 'info');
+                return false;
+            }
+            return true;
+        }
+
+        /* ==========================================================================
+           5. MOVE EXECUTION & WIN DETECTION FOR ALL 3 MODES
+           ========================================================================== */
+        const LINES_3 = [
+            [0,1,2], [3,4,5], [6,7,8],
+            [0,3,6], [1,4,7], [2,5,8],
+            [0,4,8], [2,4,6]
+        ];
+
+        function checkLineWin(arr) {
+            for (const line of LINES_3) {
+                const [a, b, c] = line;
+                if (arr[a] && (arr[a] === 'X' || arr[a] === 'O') && arr[a] === arr[b] && arr[a] === arr[c]) {
+                    return { winner: arr[a], line };
+                }
+            }
+            return null;
+        }
+
+        function handleCellClick(payload) {
+            if (!canLocalUserMove()) return;
+            const valid = applyMove(payload, true);
+            if (valid && state.mode === 'online') {
+                sendPacket({ type: 'MOVE', payload });
+            }
+        }
+
+        function applyMove(payload, isLocalAction) {
+            if (state.winner) return false;
+            const player = state.turn;
+
+            if (state.variant === '3x3') {
+                const { idx } = payload;
+                if (state.board3[idx] !== null) return false;
+                state.board3[idx] = player;
+
+                const win = checkLineWin(state.board3);
+                if (win) {
+                    state.winner = win.winner;
+                    state.winLine3 = win.line;
+                    handleVictory(win.winner);
+                } else if (state.board3.every(c => c !== null)) {
+                    state.winner = 'DRAW';
+                } else {
+                    state.turn = player === 'X' ? 'O' : 'X';
+                }
+            } else if (state.variant === '9x9') {
+                const { boardIdx, cellIdx } = payload;
+                if (state.nextSub9 !== null && state.nextSub9 !== boardIdx) return false;
+                if (state.macro9[boardIdx] !== null) return false;
+                if (state.boards9[boardIdx][cellIdx] !== null) return false;
+
+                state.boards9[boardIdx][cellIdx] = player;
+
+                // Check if mini-board won or drawn
+                const subWin = checkLineWin(state.boards9[boardIdx]);
+                if (subWin) {
+                    state.macro9[boardIdx] = subWin.winner;
+                } else if (state.boards9[boardIdx].every(c => c !== null)) {
+                    state.macro9[boardIdx] = 'DRAW';
+                }
+
+                // Determine next mandatory sub-board
+                if (state.macro9[cellIdx] === null) {
+                    state.nextSub9 = cellIdx;
+                } else {
+                    state.nextSub9 = null; // Free choice across any open sub-board
+                }
+
+                // Check macro board victory
+                const macroWin = checkLineWin(state.macro9);
+                if (macroWin) {
+                    state.winner = macroWin.winner;
+                    state.winLine9 = macroWin.line;
+                    state.nextSub9 = null;
+                    handleVictory(macroWin.winner);
+                } else if (state.macro9.every(m => m !== null)) {
+                    state.winner = 'DRAW';
+                    state.nextSub9 = null;
+                } else {
+                    state.turn = player === 'X' ? 'O' : 'X';
+                }
+            } else if (state.variant === 'infinite') {
+                const { x, y } = payload;
+                const key = `${x},${y}`;
+                if (state.infMap.has(key)) return false;
+
+                state.infMap.set(key, player);
+
+                // Auto-pan if opponent played off-screen
+                if (!isLocalAction) {
+                    if (x < state.viewX || x >= state.viewX + state.viewCols ||
+                        y < state.viewY || y >= state.viewY + state.viewRows) {
+                        state.viewX = x - Math.floor(state.viewCols / 2);
+                        state.viewY = y - Math.floor(state.viewRows / 2);
+                    }
+                }
+
+                const winCoords = checkInfiniteFive(x, y, player);
+                if (winCoords) {
+                    state.winner = player;
+                    winCoords.forEach(c => state.infWinCells.add(c));
+                    handleVictory(player);
+                } else {
+                    state.turn = player === 'X' ? 'O' : 'X';
+                }
+            }
+
+            renderActiveBoard();
+            updateTurnUI();
+            return true;
+        }
+
+        function checkInfiniteFive(x, y, player) {
+            const dirs = [[1,0], [0,1], [1,1], [1,-1]];
+            for (const [dx, dy] of dirs) {
+                const cells = [`${x},${y}`];
+                for (let step = 1; step < 5; step++) {
+                    if (state.infMap.get(`${x + dx*step},${y + dy*step}`) === player) {
+                        cells.push(`${x + dx*step},${y + dy*step}`);
+                    } else break;
+                }
+                for (let step = 1; step < 5; step++) {
+                    if (state.infMap.get(`${x - dx*step},${y - dy*step}`) === player) {
+                        cells.push(`${x - dx*step},${y - dy*step}`);
+                    } else break;
+                }
+                if (cells.length >= 5) return cells;
+            }
+            return null;
+        }
+
+        function handleVictory(winner) {
+            state.scores[winner]++;
+            updateScoresUI();
+            try {
+                confetti({
+                    particleCount: 85,
+                    spread: 70,
+                    origin: { y: 0.65 },
+                    colors: ['#0284c7', '#38bdf8', '#f97316', '#facc15', '#ffffff']
+                });
+            } catch (e) {}
+        }
+
+        /* ==========================================================================
+           6. RENDERING FOR 3x3, 9x9, AND INFINITE OCEAN
+           ========================================================================== */
+        function updateScoresUI() {
+            document.getElementById('score-x').textContent = state.scores.X;
+            document.getElementById('score-o').textContent = state.scores.O;
+        }
+
+        function updateTurnUI() {
+            const banner = document.getElementById('turn-banner');
+            const subInfo = document.getElementById('sub-instruction');
+            const badgeX = document.getElementById('badge-x');
+            const badgeO = document.getElementById('badge-o');
+
+            badgeX.className = 'flex items-center gap-2.5 px-3 py-2 rounded-xl border-2 transition-all ' +
+                (state.turn === 'X' && !state.winner ? 'border-sky-500 bg-sky-100 shadow-sm' : 'border-transparent bg-white/60');
+            badgeO.className = 'flex items-center gap-2.5 px-3 py-2 rounded-xl border-2 transition-all ' +
+                (state.turn === 'O' && !state.winner ? 'border-orange-500 bg-orange-50 shadow-sm' : 'border-transparent bg-white/60');
+
+            if (state.winner === 'DRAW') {
+                banner.textContent = "Tide's Tied — It's a Draw!";
+                banner.className = 'font-display font-bold text-sm sm:text-base text-slate-700';
+                subInfo.classList.add('hidden');
+                return;
+            }
+            if (state.winner) {
+                const who = state.mode === 'online'
+                    ? (state.winner === state.role ? 'You Won!' : 'Opponent Won!')
+                    : `Player ${state.winner} Wins!`;
+                banner.textContent = `🏆 ${who}`;
+                banner.className = `font-display font-bold text-base sm:text-lg ${state.winner === 'X' ? 'text-sky-700' : 'text-orange-600'}`;
+                subInfo.classList.add('hidden');
+                return;
+            }
+
+            const turnText = state.mode === 'online'
+                ? (state.turn === state.role ? `Your Turn (${state.role})` : `Opponent's Turn (${state.turn})`)
+                : `Player ${state.turn}'s Turn`;
+            banner.textContent = turnText;
+            banner.className = `font-display font-bold text-sm sm:text-base ${state.turn === 'X' ? 'text-sky-800' : 'text-orange-600'}`;
+
+            if (state.variant === '9x9') {
+                subInfo.classList.remove('hidden');
+                subInfo.textContent = state.nextSub9 === null
+                    ? 'Play in ANY open island'
+                    : `Must play in highlighted Island #${state.nextSub9 + 1}`;
+            } else {
+                subInfo.classList.add('hidden');
+            }
+        }
+
+        function renderActiveBoard() {
+            if (state.variant === '3x3') render3x3();
+            else if (state.variant === '9x9') render9x9();
+            else if (state.variant === 'infinite') renderInfinite();
+        }
+
+        function render3x3() {
+            const container = document.getElementById('board-3x3');
+            container.innerHTML = '';
+            state.board3.forEach((val, idx) => {
+                const isWin = state.winLine3.includes(idx);
+                const btn = document.createElement('button');
+                btn.className = `rounded-2xl font-display font-bold text-4xl sm:text-5xl flex items-center justify-center transition-all shadow-sm border-2 ${
+                    isWin
+                        ? (val === 'X' ? 'bg-sky-200 border-sky-500 scale-105' : 'bg-orange-200 border-orange-500 scale-105')
+                        : 'bg-white/90 hover:bg-sky-50 border-sky-200 active:scale-95'
+                }`;
+                if (val) {
+                    const span = document.createElement('span');
+                    span.className = `animate-pop ${val === 'X' ? 'mark-x' : 'mark-o'}`;
+                    span.textContent = val;
+                    btn.appendChild(span);
+                }
+                btn.onclick = () => handleCellClick({ idx });
+                container.appendChild(btn);
+            });
+        }
+
+        function render9x9() {
+            const container = document.getElementById('board-9x9');
+            container.innerHTML = '';
+
+            for (let b = 0; b < 9; b++) {
+                const macroWinner = state.macro9[b];
+                const isTarget = !state.winner && macroWinner === null && (state.nextSub9 === null || state.nextSub9 === b);
+                const isMacroWinCell = state.winLine9.includes(b);
+
+                const subWrapper = document.createElement('div');
+                subWrapper.className = `relative rounded-xl p-1 sm:p-1.5 grid grid-cols-3 gap-1 border-2 transition-all ${
+                    isTarget ? 'active-subboard' : 'bg-sky-50/80 border-sky-200'
+                } ${isMacroWinCell ? 'ring-4 ring-emerald-400' : ''}`;
+
+                for (let c = 0; c < 9; c++) {
+                    const val = state.boards9[b][c];
+                    const cellBtn = document.createElement('button');
+                    cellBtn.className = `rounded-md font-display font-bold text-sm sm:text-lg flex items-center justify-center bg-white/95 border border-sky-100 transition ${
+                        isTarget && !val ? 'hover:bg-amber-100 cursor-pointer' : 'cursor-default'
+                    }`;
+                    if (val) {
+                        const s = document.createElement('span');
+                        s.className = val === 'X' ? 'mark-x' : 'mark-o';
+                        s.textContent = val;
+                        cellBtn.appendChild(s);
+                    }
+                    cellBtn.onclick = () => handleCellClick({ boardIdx: b, cellIdx: c });
+                    subWrapper.appendChild(cellBtn);
+                }
+
+                // Overlay if mini-board is captured
+                if (macroWinner) {
+                    const overlay = document.createElement('div');
+                    overlay.className = `absolute inset-0 rounded-xl flex items-center justify-center font-display font-bold text-4xl sm:text-6xl backdrop-blur-[2px] animate-pop ${
+                        macroWinner === 'X' ? 'bg-sky-500/25 mark-x' :
+                        macroWinner === 'O' ? 'bg-orange-500/25 mark-o' : 'bg-slate-400/30 text-slate-700 text-2xl'
+                    }`;
+                    overlay.textContent = macroWinner === 'DRAW' ? '—' : macroWinner;
+                    subWrapper.appendChild(overlay);
+                }
+
+                container.appendChild(subWrapper);
+            }
+        }
+
+        function renderInfinite() {
+            const grid = document.getElementById('board-infinite');
+            // Adjust responsive column count
+            state.viewCols = window.innerWidth < 640 ? 8 : 12;
+            state.viewRows = window.innerWidth < 640 ? 8 : 9;
+
+            grid.style.gridTemplateColumns = `repeat(${state.viewCols}, minmax(0, 1fr))`;
+            grid.innerHTML = '';
+
+            for (let r = 0; r < state.viewRows; r++) {
+                for (let c = 0; c < state.viewCols; c++) {
+                    const gx = state.viewX + c;
+                    const gy = state.viewY + r;
+                    const key = `${gx},${gy}`;
+                    const val = state.infMap.get(key);
+                    const isWinCell = state.infWinCells.has(key);
+                    const isOrigin = gx === 0 && gy === 0;
+
+                    const cell = document.createElement('button');
+                    cell.className = `w-9 h-9 sm:w-11 sm:h-11 rounded-lg font-display font-bold text-lg sm:text-xl flex items-center justify-center border transition relative ${
+                        isWinCell
+                            ? 'bg-emerald-200 border-emerald-500 scale-105 z-10'
+                            : isOrigin
+                                ? 'bg-sky-100/90 border-sky-400 hover:bg-sky-200'
+                                : 'bg-white/95 border-sky-200/80 hover:bg-sky-50'
+                    }`;
+
+                    if (val) {
+                        const s = document.createElement('span');
+                        s.className = `animate-pop ${val === 'X' ? 'mark-x' : 'mark-o'}`;
+                        s.textContent = val;
+                        cell.appendChild(s);
+                    } else if (isOrigin) {
+                        const dot = document.createElement('span');
+                        dot.className = 'w-1.5 h-1.5 rounded-full bg-sky-400/70';
+                        cell.appendChild(dot);
+                    }
+
+                    cell.onclick = () => {
+                        if (dragMoved) return;
+                        handleCellClick({ x: gx, y: gy });
+                    };
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        /* ==========================================================================
+           7. INFINITE GRID PANNING (BUTTONS + POINTER DRAG)
+           ========================================================================== */
+        function panInfinite(dx, dy) {
+            state.viewX += dx;
+            state.viewY += dy;
+            renderInfinite();
+        }
+
+        function recenterInfinite(shouldRender = true) {
+            state.viewCols = window.innerWidth < 640 ? 8 : 12;
+            state.viewRows = window.innerWidth < 640 ? 8 : 9;
+            state.viewX = -Math.floor(state.viewCols / 2);
+            state.viewY = -Math.floor(state.viewRows / 2);
+            if (shouldRender && state.variant === 'infinite') renderInfinite();
+        }
+
+        let isDragging = false;
+        let dragMoved = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        const infViewport = document.getElementById('infinite-viewport');
+        infViewport.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            dragMoved = false;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging || state.variant !== 'infinite') return;
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            const step = 38;
+            if (Math.abs(dx) >= step || Math.abs(dy) >= step) {
+                dragMoved = true;
+                const shiftX = Math.trunc(dx / step);
+                const shiftY = Math.trunc(dy / step);
+                state.viewX -= shiftX;
+                state.viewY -= shiftY;
+                dragStartX += shiftX * step;
+                dragStartY += shiftY * step;
+                renderInfinite();
+            }
+        });
+
+        window.addEventListener('pointerup', () => {
+            isDragging = false;
+            setTimeout(() => { dragMoved = false; }, 40);
+        });
+
+        window.addEventListener('resize', () => {
+            if (state.variant === 'infinite' && !document.getElementById('game-view').classList.contains('hidden')) {
+                renderInfinite();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const inviteCode = params.get('room');
+                if (inviteCode && inviteCode.trim().length >= 4) {
+                    const cleanCode = inviteCode.trim().toUpperCase().slice(0, 6);
+                    document.getElementById('join-code-input').value = cleanCode;
+                    showToast(`Joining invite room ${cleanCode}...`, 'info');
+                    joinOnlineRoom();
+                }
+            } catch (e) {}
+        });
+    </script>
+</body>
+</html>
